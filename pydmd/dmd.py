@@ -46,7 +46,7 @@ class DMD(DMDBase):
     :type tikhonov_regularization: int or float
     """
 
-    def fit(self, X, Y=None):
+    def fit(self, X, Y=None, lag=1):
         """
         Compute the Dynamic Modes Decomposition to the input data.
 
@@ -55,14 +55,27 @@ class DMD(DMDBase):
         :param Y: additional input snapshots such that Y=AX.
             If not provided, snapshots from X are used.
         :type Y: numpy.ndarray or iterable
+        :param lag: the temporal delay for computing the lagged covariance
+            If not provided, defaults to the next snapshot (`lag` = 1). If `Y`
+            is provided, `lag` is not used
+        :type lag: int
         """
         self._reset()
         self._snapshots_holder = Snapshots(X)
         n_samples = self.snapshots.shape[1]
 
+        X2 = None
+        Y2 = None
         if Y is None:
-            X = self.snapshots[:, :-1]
-            Y = self.snapshots[:, 1:]
+            if lag > 1:
+                X = self.snapshots[:, : -lag + 1]
+                Y = self.snapshots[:, lag - 1 :]
+                X2 = self.snapshots[:, :-lag]
+                Y2 = self.snapshots[:, lag:]
+                self.operator._sorted_eigs = "abs"
+            else:
+                X = self.snapshots[:, :-1]
+                Y = self.snapshots[:, 1:]
         else:
             self._compare_data_shapes(Snapshots(Y).snapshots)
             self._snapshots_holder_y = Snapshots(Y)
@@ -72,9 +85,24 @@ class DMD(DMDBase):
         X, Y = compute_tlsq(X, Y, self._tlsq_rank)
         self._svd_modes, _, _ = self.operator.compute_operator(X, Y)
 
+        if (X2 is not None) and (Y2 is not None):
+            eigs1 = np.copy(self.eigs) ** (1.0 / (lag - 1))
+            self.operator._svd_rank = len(eigs1)
+            X2, Y2 = compute_tlsq(X2, Y2, self._tlsq_rank)
+            self._svd_modes, _, _ = self.operator.compute_operator(X2, Y2)
+            eigs2 = np.copy(self.eigs) ** (1.0 / lag)
+            eigs = np.abs(eigs2) * np.exp(
+                1.0j * (lag * np.angle(eigs2) - (lag - 1) * np.angle(eigs1))
+            )
+            # the eigenvalues can only be modified in-place
+            for i, eig in enumerate(eigs):
+                self.eigs[i] = eig
+            # can we fix A_tilde
+            # self.operator._eigenvalues?
+
         # Default timesteps
         self._set_initial_time_dictionary(
-            {"t0": 0, "tend": n_samples - 1, "dt": 1}
+            {"t0": 0, "tend": n_samples - lag, "dt": 1}
         )
 
         self._b = self._compute_amplitudes()

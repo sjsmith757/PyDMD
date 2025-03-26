@@ -71,6 +71,18 @@ def test_Atilde_values():
     np.testing.assert_allclose(exact_atilde, dmd.operator.as_numpy_array)
 
 
+def test_Atilde_values_lag():
+    dmd = DMD(svd_rank=2)
+    dmd.fit(X=sample_data, lag=3)
+    exact_atilde = np.array(
+        [
+            [-0.70558526 + 0.67815084j, 0.22914898 + 0.20020143j],
+            [0.10459069 + 0.09137814j, -0.57730040 + 0.79022994j],
+        ]
+    )
+    np.testing.assert_allclose(exact_atilde, dmd.operator.as_numpy_array)
+
+
 def test_eigs_1():
     dmd = DMD(svd_rank=-1)
     dmd.fit(X=sample_data)
@@ -90,6 +102,23 @@ def test_eigs_3():
         [-8.09016994e-01 + 5.87785252e-01j, -4.73868662e-01 + 8.80595532e-01j]
     )
     np.testing.assert_almost_equal(dmd.eigs, expected_eigs, decimal=6)
+
+
+def test_eigs_lag():
+
+    for lag in range(4, 11):
+        dmd = DMD(svd_rank=2)
+        dmd.fit(X=sample_data, lag=lag)
+        expected_eigs = np.array(
+            [
+                -8.09016994e-01 + 5.87785252e-01j,
+                -4.73868662e-01 + 8.80595532e-01j,
+            ]
+        )
+        np.testing.assert_almost_equal(dmd.eigs, expected_eigs, decimal=6)
+
+
+# need to test times
 
 
 def test_dynamics_1():
@@ -413,7 +442,7 @@ def test_advanced_snapshot_parameter():
 
 def test_sorted_eigs_default():
     dmd = DMD()
-    assert dmd.operator._sorted_eigs == False
+    assert not dmd.operator._sorted_eigs
 
 
 def test_sorted_eigs_set_real():
@@ -587,7 +616,7 @@ def test_load():
     )
 
 
-def test_load():
+def test_load_2():
     dmd = DMD(svd_rank=-1)
     dmd.fit(X=sample_data)
     dmd.save("pydmd.test2")
@@ -598,7 +627,7 @@ def test_load():
 def test_get_bitmask_default():
     dmd = DMD(svd_rank=10)
     dmd.fit(X=sample_data)
-    assert np.all(dmd.modes_activation_bitmask == True)
+    assert np.all(dmd.modes_activation_bitmask)
 
 
 def test_set_bitmask():
@@ -609,8 +638,8 @@ def test_set_bitmask():
     new_bitmask[[0]] = False
     dmd.modes_activation_bitmask = new_bitmask
 
-    assert dmd.modes_activation_bitmask[0] == False
-    assert np.all(dmd.modes_activation_bitmask[1:] == True)
+    assert not dmd.modes_activation_bitmask[0]
+    assert np.all(dmd.modes_activation_bitmask[1:])
 
 
 def test_not_fitted_get_bitmask_raises():
